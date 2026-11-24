@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Home Office 3D</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #dfe6ea; }
+  canvas { display: block; }
+  .bar { position: fixed; top: 16px; left: 16px; display: flex; gap: 10px; flex-wrap: wrap; }
+  select { appearance: none; -webkit-appearance: none; font: 500 14px/1 -apple-system, "Segoe UI", Inter, Roboto, sans-serif;
+    color: #1f2428; background: rgba(255,255,255,.92); border: 1px solid rgba(0,0,0,.12); border-radius: 999px;
+    padding: 10px 34px 10px 16px; box-shadow: 0 4px 14px rgba(0,0,0,.10); cursor: pointer;
+    background-image: linear-gradient(45deg, transparent 50%, #555 50%), linear-gradient(135deg, #555 50%, transparent 50%);
+    background-position: calc(100% - 18px) 55%, calc(100% - 13px) 55%; background-size: 5px 5px; background-repeat: no-repeat; }
+</style>
+<script type="importmap">
+{ "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div class="bar">
+  <select id="paint" aria-label="Wall colours"></select>
+  <select id="floor" aria-label="Flooring"></select>
+</div>
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+// All dimensions in feet. x = across the 11.5 ft width, z = along the 18 ft length (entry wall at z = 18).
+const W = 11.5, L = 18, H = 9, AX = 4.9, WZ = 6.6;
+
+const PAINTS = [
+  { name: "Warm white + sage", wall: 0xf2ede3, accent: 0x9caf94 },
+  { name: "Greige + navy", wall: 0xd9d2c5, accent: 0x2b3a55 },
+  { name: "Light grey + charcoal", wall: 0xdcdfe1, accent: 0x3c4044 },
+  { name: "Warm white + terracotta", wall: 0xf2ede3, accent: 0xc4704f }
+];
+const FLOORS = [
+  { name: "Vinyl plank · light oak", color: 0xdcc39a, type: "plank" },
+  { name: "Engineered wood · natural oak", color: 0xb98a55, type: "plank" },
+  { name: "Laminate · grey oak", color: 0xb5ada0, type: "plank" },
+  { name: "Porcelain tile · matte", color: 0xe6e3dc, type: "tile" }
+];
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.25;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xdfe6ea);
+const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 300);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(5.2, 2.2, 9.6);
+controls.enableDamping = true;
+controls.minDistance = 8; controls.maxDistance = 70; controls.maxPolarAngle = 1.5;
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0xb9b0a2, 1.5));
+const sun = new THREE.DirectionalLight(0xfff1dd, 2.4);
+sun.position.set(17, 26, 24); sun.target.position.set(5.5, 0, 9);
+sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.03;
+Object.assign(sun.shadow.camera, { left: -16, right: 16, top: 16, bottom: -16, near: 1, far: 80 });
+scene.add(sun, sun.target);
+
+// ---------- helpers ----------
+const M = (color, rough = 0.8, metal = 0, extra = {}) =>
+  new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal, ...extra });
+function B(x0, x1, y0, y1, z0, z1, mat, parent = scene) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0), mat);
+  m.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
+  m.castShadow = true; m.receiveShadow = true; parent.add(m); return m;
+}
+function C(r, h, x, y, z, mat, axis = "y", parent = scene, rTop = r) {
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(rTop, r, h, 28), mat);
+  if (axis === "x") m.rotation.z = Math.PI / 2;
+  if (axis === "z") m.rotation.x = Math.PI / 2;
+  m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m;
+}
+// Wall from A to B; its visible face points to the left-hand side of A→B rotated so (-dz, dx) is "inside".
+function wall(ax, az, bx, bz, mat, holes = []) {
+  const dx = bx - ax, dz = bz - az, len = Math.hypot(dx, dz);
+  const s = new THREE.Shape();
+  s.moveTo(0, -0.05); s.lineTo(len, -0.05); s.lineTo(len, H); s.lineTo(0, H); s.closePath();
+  holes.forEach(([u0, u1, v0, v1]) => {
+    const p = new THREE.Path();
+    p.moveTo(u0, v0); p.lineTo(u1, v0); p.lineTo(u1, v1); p.lineTo(u0, v1); p.closePath();
+    s.holes.push(p);
+  });
+  const g = new THREE.Group();
+  g.position.set(ax, 0, az); g.rotation.y = Math.atan2(-dz, dx);
+  const m = new THREE.Mesh(new THREE.ShapeGeometry(s), mat);
+  m.receiveShadow = true; g.add(m); scene.add(g); return g;
+}
+const frameMat = M(0xffffff, 0.5);
+const glassMat = new THREE.MeshStandardMaterial({ color: 0xbfe3f5, transparent: true, opacity: 0.28, roughness: 0.05,
+  metalness: 0.1, side: THREE.DoubleSide, depthWrite: false });
+function windowIn(g, u0, u1, v0, v1) {
+  const t = 0.12, uc = (u0 + u1) / 2, vc = (v0 + v1) / 2, w = u1 - u0, h = v1 - v0;
+  const glass = new THREE.Mesh(new THREE.PlaneGeometry(w, h), glassMat); glass.position.set(uc, vc, 0); g.add(glass);
+  const bar = (bw, bh, x, y, d = 0.24) => { const m = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, d), frameMat);
+    m.position.set(x, y, 0); g.add(m); };
+  bar(w + 2 * t, t, uc, v1 + t / 2); bar(w + 2 * t, t, uc, v0 - t / 2);
+  bar(t, h, u0 - t / 2, vc); bar(t, h, u1 + t / 2, vc); bar(0.07, h, uc, vc, 0.1);
+  bar(w + 2 * t + 0.2, 0.06, uc, v0 - t - 0.03, 0.5); // sill
+}
+function canvasTex(draw) {
+  const c = document.createElement("canvas"); c.width = c.height = 512;
+  draw(c.getContext("2d"));
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(0.25, 0.25); // one tile = 4 ft
+  t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t;
+}
+let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+const plankTex = canvasTex(g => {
+  for (let i = 0; i < 8; i++) {           // 8 planks of 0.5 ft across, running along the room length
+    let y = -rnd() * 300;
+    while (y < 512) {
+      const len = 300 + rnd() * 212, v = 225 + Math.floor(rnd() * 30);
+      g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(i * 64, y, 64, len);
+      g.fillStyle = "rgba(0,0,0,.28)"; g.fillRect(i * 64, y, 64, 1.5);
+      y += len;
+    }
+    g.fillStyle = "rgba(0,0,0,.28)"; g.fillRect(i * 64, 0, 1.5, 512);
+  }
+});
+const tileTex = canvasTex(g => {
+  g.fillStyle = "#f4f4f4"; g.fillRect(0, 0, 512, 512);
+  g.fillStyle = "rgba(0,0,0,.22)";
+  for (let i = 0; i < 2; i++) { g.fillRect(i * 256, 0, 3, 512); g.fillRect(0, i * 256, 512, 3); }
+});
+
+// ---------- floor ----------
+const floorMat = M(FLOORS[0].color, 0.65, 0, { map: plankTex });
+{
+  const s = new THREE.Shape();
+  s.moveTo(0, 0); s.lineTo(AX, 0); s.lineTo(AX, -WZ); s.lineTo(W, -WZ); s.lineTo(W, -L); s.lineTo(0, -L); s.closePath();
+  const f = new THREE.Mesh(new THREE.ShapeGeometry(s), floorMat);
+  f.rotation.x = -Math.PI / 2; f.receiveShadow = true; scene.add(f);
+  const wf = new THREE.Mesh(new THREE.PlaneGeometry(W - AX, WZ), M(0xcbd5da, 0.4));
+  wf.rotation.x = -Math.PI / 2; wf.position.set((AX + W) / 2, -0.01, WZ / 2); wf.receiveShadow = true; scene.add(wf);
+}
+
+// ---------- walls, windows, doors ----------
+const wallMat = M(PAINTS[0].wall, 0.95);
+const wallMat2 = M(PAINTS[0].wall, 0.95, 0, { side: THREE.DoubleSide });
+const accentMat = M(PAINTS[0].accent, 0.95);
+const washMat = M(0xf4f6f7, 0.6);
+const doorMat = M(0x9a6b43, 0.6);
+const brass = M(0xc9a24a, 0.35, 0.8);
+
+const leftWall = wall(0, L, 0, 0, accentMat, [[5, 10, 3, 7]]);            // accent wall, window above the desk
+windowIn(leftWall, 5, 10, 3, 7);
+wall(0, 0, AX, 0, wallMat);                                                // back of the alcove
+const washSide = wall(AX, 0, AX, WZ, wallMat2, [[0.4, 2.9, 0, 7]]);        // washroom side wall with its door
+{
+  const d = new THREE.Mesh(new THREE.BoxGeometry(2.5, 7, 0.12), doorMat); d.position.set(1.65, 3.5, 0); washSide.add(d);
+  const h = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.45, 0.3), brass); h.position.set(2.65, 3.3, 0); washSide.add(h);
+}
+wall(AX, WZ, W, WZ, wallMat2);                                             // washroom front wall
+const rightWall = wall(W, WZ, W, L, wallMat, [[3.2, 8.2, 3, 7]]);          // window centred on the open part
+windowIn(rightWall, 3.2, 8.2, 3, 7);
+const entryWall = wall(W, L, 0, L, wallMat, [[0.25, 3.25, 0, 7]]);         // entry wall with door opening
+wall(AX, 0, W, 0, washMat); wall(W, 0, W, WZ, washMat);                    // washroom outer walls
+{
+  const hinge = new THREE.Group(); hinge.position.set(11.25, 0, L); hinge.rotation.y = -1.3; scene.add(hinge);
+  B(-3, 0, 0, 7, -0.07, 0.07, doorMat, hinge);
+  B(-2.85, -2.73, 3.1, 3.55, -0.18, 0.18, brass, hinge);
+}
+
+// ---------- coffee station (left of the entry door) ----------
+const charcoal = M(0x2f3437, 0.7), walnut = M(0x7b5234, 0.55), steel = M(0xc5c9cc, 0.3, 0.85), black = M(0x1c1f22, 0.6);
+B(0, 7.75, 0, 2.9, 16.05, L, charcoal);
+B(0.1, 7.65, 0, 0.3, 16.0, 16.06, black);
+B(0, 7.8, 2.9, 3.02, 15.95, L, walnut);
+for (let i = 0; i < 5; i++) {
+  if (i) B(i * 1.55 - 0.012, i * 1.55 + 0.012, 0.3, 2.85, 16.035, 16.055, black);
+  B(i * 1.55 + 0.12, i * 1.55 + 0.18, 1.9, 2.5, 15.98, 16.05, brass);
+}
+B(1.0, 1.95, 3.02, 4.25, 16.75, 17.8, steel); B(1.08, 1.87, 3.35, 3.95, 16.72, 16.76, black);   // espresso machine
+B(1.05, 1.9, 3.02, 3.1, 16.45, 16.75, black);
+C(0.27, 0.7, 3.0, 3.37, 17.2, steel, "y", scene, 0.2); C(0.05, 0.3, 3.0, 3.87, 17.2, black);     // kettle
+C(0.2, 0.75, 4.1, 3.4, 17.3, black); C(0.17, 0.4, 4.1, 3.97, 17.3, M(0x8a5a3a, 0.4, 0, { transparent: true, opacity: 0.8 }), "y", scene, 0.26);
+B(5.2, 6.9, 3.02, 3.08, 16.6, 17.6, M(0xd8c9a8, 0.8));                                           // tray
+[0xe8e4dc, 0x9caf94, 0xc4704f].forEach((c, i) => C(0.13, 0.3, 5.6 + i * 0.45, 3.23, 17.1, M(c, 0.5)));
+B(0.5, 7.25, 5.0, 5.09, 17.15, L, walnut);                                                        // wall shelf
+[0xe8e4dc, 0x9caf94, 0x2b3a55, 0xc4704f, 0xe8e4dc, 0x3c4044].forEach((c, i) => C(0.13, 0.3, 1.0 + i * 0.5, 5.24, 17.6, M(c, 0.5)));
+[5.0, 5.6, 6.2].forEach(x => { C(0.2, 0.55, x, 5.37, 17.6, M(0xdfe9ee, 0.1, 0, { transparent: true, opacity: 0.55 }));
+  C(0.19, 0.3, x, 5.25, 17.6, M(0x5a3a22, 0.9)); C(0.21, 0.06, x, 5.67, 17.6, walnut); });
+
+// ---------- washroom: commode, two taps, exhaust fan ----------
+{
+  const china = M(0xfafafa, 0.25), chrome = M(0xd5d9dc, 0.2, 0.9);
+  // Commode and taps sit on the washroom's front (office-side) wall: built against z = 0, then mirrored to z = WZ.
+  const fw = new THREE.Group(); fw.position.z = WZ; fw.scale.z = -1; scene.add(fw);
+  // Commode against the right (window-side) wall, facing across the washroom.
+  const cg = new THREE.Group(); cg.rotation.y = -Math.PI / 2; cg.position.set(W, 0, 4.4 - 9.8); scene.add(cg);
+  B(9.05, 10.55, 1.2, 2.7, 0.05, 0.7, china, cg); B(9.0, 10.6, 2.7, 2.8, 0.02, 0.75, china, cg);  // cistern
+  C(0.07, 0.04, 9.8, 2.82, 0.38, chrome, "y", cg);
+  const bowl = C(0.42, 1.3, 9.8, 0.65, 1.5, china, "y", cg, 0.62); bowl.scale.z = 1.25;
+  const seat = C(0.65, 0.08, 9.8, 1.34, 1.5, M(0xe9e9e6, 0.4), "y", cg); seat.scale.z = 1.25;
+  const tap = (x, y) => {
+    C(0.1, 0.05, x, y, 0.03, chrome, "z", fw); C(0.05, 0.36, x, y, 0.2, chrome, "z", fw);
+    B(x - 0.04, x + 0.04, y - 0.2, y, 0.33, 0.41, chrome, fw); B(x - 0.13, x + 0.13, y + 0.05, y + 0.09, 0.14, 0.22, chrome, fw);
+  };
+  tap(8.3, 1.6); tap(6.6, 2.6);
+  B(9.2, 10.4, 7.0, 8.2, 0, 0.12, china);                                                          // exhaust fan
+  C(0.5, 0.02, 9.8, 7.6, 0.13, M(0x30353a, 0.6), "z");
+  [0.6, 2.17].forEach(a => { const g = new THREE.Group(); g.position.set(9.8, 7.6, 0.15); g.rotation.z = a; scene.add(g);
+    B(-0.45, 0.45, -0.07, 0.07, 0, 0.02, M(0x8a9198, 0.4, 0.5), g); });
+  C(0.12, 0.05, 9.8, 7.6, 0.17, chrome, "z");
+}
+
+// ---------- desk (left wall, under the window) ----------
+const deskTop = M(0x8a5a3a, 0.5), darkMetal = M(0x202327, 0.5, 0.6), screen = M(0x0e1114, 0.25, 0.2),
+  glow = M(0x24405c, 0.3, 0, { emissive: 0x2c5a85, emissiveIntensity: 0.7 }), alu = M(0xb9bdc2, 0.35, 0.8);
+B(0, 2.5, 2.42, 2.52, 7.5, 13.5, deskTop);
+[[8.1, 8.35], [12.65, 12.9]].forEach(([a, b]) => { B(1.1, 1.4, 0.08, 2.42, a, b, darkMetal); B(0.15, 2.35, 0, 0.08, a, b, darkMetal); });
+B(1.15, 1.35, 2.3, 2.42, 8.2, 12.8, darkMetal);
+C(0.05, 1.3, 0.3, 3.17, 10.5, darkMetal); B(0.3, 0.5, 3.5, 3.6, 10.45, 10.55, darkMetal);         // monitor arm
+B(0.5, 0.58, 3.0, 4.15, 9.5, 11.5, screen); B(0.58, 0.59, 3.05, 4.1, 9.55, 11.45, glow);          // monitor
+function laptop(xc, zc) {
+  B(xc - 0.35, xc + 0.35, 2.52, 2.56, zc - 0.5, zc + 0.5, alu);
+  B(xc - 0.25, xc + 0.2, 2.56, 2.565, zc - 0.42, zc + 0.42, black);
+  const g = new THREE.Group(); g.position.set(xc - 0.35, 2.56, zc); g.rotation.z = 0.3; scene.add(g);
+  B(-0.015, 0.015, 0, 0.68, -0.5, 0.5, alu, g); B(0.015, 0.02, 0.03, 0.65, -0.47, 0.47, glow, g);
+}
+laptop(1.3, 10.5); laptop(1.3, 12.0);
+[[7.7, 8.15], [12.85, 13.3]].forEach(([a, b]) => { B(0.2, 0.65, 2.52, 3.3, a, b, black);
+  C(0.14, 0.02, 0.66, 2.8, (a + b) / 2, alu, "x"); C(0.07, 0.02, 0.66, 3.1, (a + b) / 2, alu, "x"); });
+B(1.6, 2.2, 2.52, 2.58, 7.9, 9.2, black);                                                          // gaming keyboard
+B(1.0, 1.4, 2.52, 2.56, 8.4, 8.7, alu);                                                            // phone stand
+{ const g = new THREE.Group(); g.position.set(1.12, 2.56, 8.55); g.rotation.z = 0.3; scene.add(g);
+  B(-0.015, 0.015, 0, 0.3, -0.3, 0.3, screen, g); B(0.015, 0.02, 0.02, 0.28, -0.28, 0.28, glow, g); }
+
+// ---------- chair ----------
+{
+  const ch = new THREE.Group(); ch.position.set(3.35, 0, 10.5); scene.add(ch);
+  const fabric = M(0x33383d, 0.95), frame = M(0x1c1f22, 0.5, 0.4);
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2, s = new THREE.Group(); s.rotation.y = a; ch.add(s);
+    B(0, 0.95, 0.18, 0.26, -0.06, 0.06, frame, s);
+    const w = new THREE.Mesh(new THREE.SphereGeometry(0.1, 12, 8), frame); w.position.set(0.92, 0.1, 0); w.castShadow = true; s.add(w);
+  }
+  C(0.07, 1.15, 0, 0.82, 0, alu, "y", ch);
+  B(-0.75, 0.75, 1.39, 1.62, -0.75, 0.75, fabric, ch);
+  const back = new THREE.Group(); back.position.set(0.7, 1.6, 0); back.rotation.z = -0.13; ch.add(back);
+  B(-0.06, 0.06, 0.15, 2.1, -0.7, 0.7, fabric, back);
+  B(-0.14, -0.05, 0.35, 0.85, -0.55, 0.55, M(0x9caf94, 0.9), back);                                // lumbar pad
+  [-0.82, 0.82].forEach(z => { B(-0.05, 0.05, 1.55, 2.2, z - 0.04, z + 0.04, frame, ch); B(-0.45, 0.45, 2.2, 2.28, z - 0.1, z + 0.1, frame, ch); });
+}
+
+// ---------- printer rack (alcove beside the washroom) ----------
+const shelfWood = M(0xb98c5a, 0.7);
+[[0.05, 0.3], [0.05, 5.3], [1.95, 0.3], [1.95, 5.3]].forEach(([x, z]) => B(x - 0.05, x + 0.05, 0, 3.04, z - 0.05, z + 0.05, darkMetal));
+[0.45, 1.7, 2.97].forEach(y => B(0, 2, y, y + 0.07, 0.25, 5.35, shelfWood));
+B(0.3, 1.7, 3.04, 3.2, 0.5, 1.9, black);                                                           // 3D printer
+[0.35, 1.55].forEach(x => B(x, x + 0.1, 3.2, 4.6, 1.15, 1.25, darkMetal));
+B(0.35, 1.65, 4.5, 4.6, 1.15, 1.25, darkMetal); B(0.35, 1.65, 3.95, 4.02, 1.17, 1.23, alu);
+B(0.5, 1.5, 3.22, 3.26, 0.7, 1.7, alu); B(0.9, 1.1, 3.88, 4.1, 1.03, 1.25, M(0xe2632a, 0.5));
+B(0.8, 1.1, 3.26, 3.6, 1.0, 1.3, M(0xe2632a, 0.6));                                                // part being printed
+C(0.33, 0.2, 1.0, 4.93, 1.2, M(0xe2632a, 0.6), "z"); C(0.1, 0.22, 1.0, 4.93, 1.2, black, "z");
+B(0.25, 1.75, 3.04, 3.75, 3.4, 4.9, M(0xe9e9e6, 0.6)); B(0.3, 1.7, 3.75, 3.82, 3.45, 4.85, M(0x3a3d40, 0.5));   // colour printer
+B(1.75, 2.2, 3.25, 3.29, 3.7, 4.6, M(0xcfd2d4, 0.6)); B(1.75, 1.76, 3.4, 3.6, 3.6, 4.7, black);
+const clear = M(0xe6f0f4, 0.1, 0, { transparent: true, opacity: 0.35, depthWrite: false });
+[0xe2632a, 0x2f6fb5, 0xf2c230, 0x3d7a4f, 0xe8e8e8, 0x1c1f22, 0xb0324a, 0x7a4fb0, 0x38a6a0].forEach((c, i) => {
+  const box = Math.floor(i / 3), z0 = 0.5 + box * 1.6;
+  C(0.33, 0.2, 0.55 + (i % 3) * 0.45, 2.12, z0 + 0.55, M(c, 0.6), "x");
+  if (i % 3 === 0) { const m = B(0.25, 1.75, 1.77, 2.6, z0, z0 + 1.1, clear); m.castShadow = false; B(0.22, 1.78, 2.6, 2.66, z0 - 0.03, z0 + 1.13, M(0x3a6ea5, 0.6)); }
+});
+[0.5, 2.2, 3.9].forEach((z, i) => B(0.2, 1.8, 0.52, 1.45, z, z + 1.2, M([0x5c6770, 0x7c8790, 0x5c6770][i], 0.8)));  // storage bins
+
+// ---------- workout zone ----------
+B(7, 9, 0, 0.05, 7.6, 13.6, M(0x2f7f78, 0.95));
+[[9.7, 8.2], [9.7, 9.0]].forEach(([x, z]) => { C(0.07, 0.9, x, 0.2, z, steel, "x"); C(0.2, 0.25, x - 0.4, 0.2, z, black, "x"); C(0.2, 0.25, x + 0.4, 0.2, z, black, "x"); });
+C(0.42, 0.9, 10.75, 0.45, 7.3, M(0xf1eee8, 0.7), "y", scene, 0.5);                                 // plant
+[[0, 1.6, 0, 0.75], [0.35, 2.2, 0.15, 0.6], [-0.3, 2.3, -0.2, 0.55], [0.05, 2.8, 0.05, 0.5]].forEach(([dx, y, dz, r]) => {
+  const m = new THREE.Mesh(new THREE.IcosahedronGeometry(r, 1), M(0x4f8a56, 0.9, 0, { flatShading: true }));
+  m.position.set(10.75 + dx, y, 7.3 + dz); m.castShadow = true; scene.add(m);
+});
+
+// ---------- ceiling lights, fan, air conditioner ----------
+let fanRotor;
+{
+  const white = M(0xffffff, 0.5), lit = M(0xfff6dc, 0.3, 0, { emissive: 0xffe9b0, emissiveIntensity: 1.6 });
+  // Recessed downlights: 2 x 3 grid over the office, one in the alcove, one in the washroom.
+  const spots = [[2.9, 8.6], [8.6, 8.6], [2.9, 12.3], [8.6, 12.3], [2.9, 16.0], [8.6, 16.0], [2.45, 3.3], [8.2, 3.3]];
+  spots.forEach(([x, z]) => { C(0.3, 0.06, x, H - 0.03, z, white).castShadow = false; C(0.22, 0.02, x, H - 0.07, z, lit).castShadow = false; });
+  B(0.6, 7.15, 4.95, 5.0, 17.3, 17.45, lit).castShadow = false;                                    // strip under the coffee shelf
+  // Ceiling fan, centred on the open office floor.
+  const fx = 5.75, fz = 12.3;
+  C(0.04, 1.0, fx, H - 0.5, fz, darkMetal); C(0.2, 0.12, fx, H - 0.06, fz, darkMetal);
+  fanRotor = new THREE.Group(); fanRotor.position.set(fx, H - 1.05, fz); scene.add(fanRotor);
+  C(0.38, 0.28, 0, 0, 0, M(0xf1eee8, 0.4), "y", fanRotor);
+  for (let i = 0; i < 3; i++) { const b = new THREE.Group(); b.rotation.y = (i * Math.PI * 2) / 3; fanRotor.add(b);
+    B(0.3, 2.1, -0.03, 0.0, -0.22, 0.22, walnut, b); }
+  // Split AC indoor unit above the desk window, blowing over the desk into the room.
+  B(0.02, 0.75, 7.55, 8.45, 9.1, 11.9, white); B(0.55, 0.77, 7.55, 7.68, 9.3, 11.7, M(0x3a3f44, 0.6));
+  // AC pipe hole through the left wall, beside the unit (3 in core hole).
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.125, 0.19, 32), M(0xb9bdc2, 0.5)); ring.position.set(9.2, 7.95, 0.03); leftWall.add(ring);
+  const hole = new THREE.Mesh(new THREE.CircleGeometry(0.125, 32), M(0x0c0d0e, 1)); hole.position.set(9.2, 7.95, 0.03); leftWall.add(hole);
+}
+
+// ---------- switchboards and sockets ----------
+// Flat plates on the wall face, so they hide together with their wall. kinds: "s" = switch, "p" = socket.
+{
+  const rim = new THREE.MeshStandardMaterial({ color: 0x8d949a, roughness: 0.6 });
+  const plate = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.35 });
+  const rocker = new THREE.MeshStandardMaterial({ color: 0xd9dde0, roughness: 0.4 });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x2b3035, roughness: 0.5 });
+  const led = new THREE.MeshStandardMaterial({ color: 0xff7a3d, emissive: 0xff5a1f, emissiveIntensity: 0.9 });
+  const quad = (g, w, h, u, v, z, m) => { const q = new THREE.Mesh(new THREE.PlaneGeometry(w, h), m); q.position.set(u, v, z); g.add(q); };
+  function board(g, u, v, kinds, vertical = false) {
+    const n = kinds.length, cell = 0.24, w = vertical ? cell + 0.1 : n * cell + 0.1, h = vertical ? n * cell + 0.1 : cell + 0.1;
+    quad(g, w + 0.05, h + 0.05, u, v, 0.02, rim); quad(g, w, h, u, v, 0.03, plate);
+    [...kinds].forEach((k, i) => {
+      const o = (i - (n - 1) / 2) * cell, cu = vertical ? u : u + o, cv = vertical ? v - o : v;
+      if (k === "s") { quad(g, 0.14, 0.18, cu, cv, 0.04, rocker); quad(g, 0.03, 0.03, cu, cv + 0.05, 0.05, led); }
+      else { quad(g, 0.18, 0.18, cu, cv, 0.04, rocker); [[-0.045, -0.035], [0.045, -0.035], [0, 0.045]].forEach(([a, b]) => quad(g, 0.035, 0.035, cu + a, cv + b, 0.05, dark)); }
+    });
+  }
+  board(entryWall, 3.5, 4.4, "ssss", true);      // by the entry door, latch side: two light circuits, fan, shelf strip
+  board(entryWall, 10.0, 3.6, "spsp");           // coffee counter: machine and kettle
+  board(entryWall, 6.6, 3.6, "sp");              // coffee counter: grinder / spare
+  board(leftWall, 7.5, 1.3, "spppps");           // under the desk: laptops, monitor, speakers, chargers
+  board(leftWall, 4.75, 2.85, "pp");             // desk-top level, beside the window: phone and gaming
+  board(leftWall, 15.0, 4.2, "spsp");            // printer alcove: 3D printer and colour printer
+  board(washSide, 3.3, 4.4, "ss", true);         // outside the washroom door: light and exhaust
+  board(rightWall, 1.6, 1.3, "sp");              // workout zone: fan, vacuum or treadmill
+  board(leftWall, 5.6, 8.0, "sp");               // high point beside the air conditioner
+}
+
+// ---------- colour switching ----------
+function fill(id, list, apply) {
+  const el = document.getElementById(id);
+  list.forEach((o, i) => el.add(new Option(o.name, i)));
+  el.addEventListener("change", () => apply(list[el.value]));
+}
+fill("paint", PAINTS, p => { wallMat.color.setHex(p.wall); wallMat2.color.setHex(p.wall); accentMat.color.setHex(p.accent); });
+fill("floor", FLOORS, f => { floorMat.color.setHex(f.color); floorMat.map = f.type === "tile" ? tileTex : plankTex; floorMat.needsUpdate = true; });
+
+// ---------- view ----------
+function resize() {
+  const w = window.innerWidth, h = window.innerHeight, a = w / h;
+  renderer.setSize(w, h); camera.aspect = a; camera.updateProjectionMatrix();
+}
+function frameView() {
+  const k = Math.max(1, 1.25 / camera.aspect);
+  camera.position.set(5.2 + 13 * k, 2.2 + 13 * k, 9.6 + 16 * k);
+}
+window.addEventListener("resize", resize);
+resize(); frameView(); controls.update();
+renderer.setAnimationLoop(() => { fanRotor.rotation.y += 0.06; controls.update(); renderer.render(scene, camera); });
+</script>
+</body>
+</html>
