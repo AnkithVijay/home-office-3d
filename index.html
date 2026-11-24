@@ -25,7 +25,6 @@
 <div class="bar">
   <select id="paint" aria-label="Wall colours"></select>
   <select id="floor" aria-label="Flooring"></select>
-  <select id="ceiling" aria-label="Ceiling"></select>
   <select id="view" aria-label="View"></select>
 </div>
 <script type="module">
@@ -396,7 +395,7 @@ function setView(v) {
     controls.target.set(5.2, 2.2, 9.6); camera.position.set(5.2 + 13 * k, 2.2 + 13 * k, 9.6 + 16 * k); }
   controls.update();
 }
-fill("ceiling", [{ name: "Border false ceiling", on: true }, { name: "Plain ceiling", on: false }], c => { cove.visible = c.on; });
+cove.visible = false; // plain ceiling chosen; the border false ceiling is kept in code but hidden
 fill("view", VIEWS, setView);
 window.addEventListener("resize", resize);
 resize(); setView(VIEWS[0]);
