@@ -333,20 +333,38 @@ scene.add(blindsUp, blindsDown); blindsDown.visible = false;
   [[9.2, z0 + 4], [9.2, z0 + 4.8]].forEach(([x, z]) => { C(0.07, 0.9, x, 0.25, z, steel, "x"); C(0.2, 0.25, x - 0.4, 0.25, z, black, "x"); C(0.2, 0.25, x + 0.4, 0.25, z, black, "x"); });
   B(0.4, 2.1, -0.02, 1.6, z1 - 3.6, z1 - 0.6, M(0x55606a, 0.8)); B(0.35, 2.15, 1.6, 1.72, z1 - 3.65, z1 - 0.55, M(0x6b7780, 0.7));   // weatherproof storage box
   C(0.45, 1.7, 7.3, 0.83, z0 + 0.7, M(0x3d5a48, 0.7)); C(0.48, 0.1, 7.3, 1.73, z0 + 0.7, black);   // outdoor bin beside the door
-  // Roof: faces down only, so it hides from above. Beams and posts mark its edge.
-  const roof = new THREE.Mesh(new THREE.PlaneGeometry(W, OL), M(0xf3f3f1, 0.9, 0, { emissive: 0xffffff, emissiveIntensity: 0.35 }));
-  roof.rotation.x = Math.PI / 2; roof.position.set(W / 2, H, (z0 + z1) / 2); scene.add(roof);
-  B(0, 0.3, 8.6, H, z0, z1, post); B(W - 0.3, W, 8.6, H, z0, z1, post); B(0, W, 8.6, H, z1 - 0.3, z1, post);
-  B(0, 0.3, -0.02, 8.6, z1 - 0.3, z1, post); B(W - 0.3, W, -0.02, 8.6, z1 - 0.3, z1, post);
+  // Sheet roof on an iron-pipe frame, sloping away from the office. The sheet faces down only, so it hides from above.
+  const slope = 0.05, ry = z => 8.95 - slope * (z - z0);
+  const pipe = (ax, ay, az, bx, by, bz, r) => {
+    const a = new THREE.Vector3(ax, ay, az), d = new THREE.Vector3(bx - ax, by - ay, bz - az);
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, d.length(), 16), post);
+    m.position.copy(a).addScaledVector(d, 0.5); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.clone().normalize());
+    m.castShadow = true; scene.add(m);
+  };
+  const zs = [z0 + 0.2, (z0 + z1) / 2, z1 - 0.2];
+  [0.15, W - 0.15].forEach(x => {
+    zs.forEach(z => { pipe(x, -0.02, z, x, ry(z) - 0.2, z, 0.12); C(0.25, 0.04, x, 0, z, post); });            // posts with base plates
+    pipe(x, ry(zs[0]) - 0.2, zs[0], x, ry(zs[2]) - 0.2, zs[2], 0.1);                                             // side rails
+  });
+  [0.2, 3.1, 6, 8.9, 11.8].forEach(o => pipe(0.15, ry(z0 + o) - 0.08, z0 + o, W - 0.15, ry(z0 + o) - 0.08, z0 + o, 0.07));   // purlins
+  const ribs = canvasTex(g => { const gr = g.createLinearGradient(0, 0, 512, 0);
+    gr.addColorStop(0, "#8f9aa1"); gr.addColorStop(0.5, "#eef2f4"); gr.addColorStop(1, "#8f9aa1"); g.fillStyle = gr; g.fillRect(0, 0, 512, 512); });
+  ribs.repeat.set(46, 1);
+  const sheetRoof = new THREE.Mesh(new THREE.PlaneGeometry(W + 0.8, OL + 0.6), M(0xc9d2d8, 0.45, 0.4, { map: ribs, emissive: 0xffffff, emissiveIntensity: 0.12 }));
+  sheetRoof.rotation.x = Math.PI / 2 + Math.atan(slope); sheetRoof.position.set(W / 2, ry((z0 + z1) / 2), (z0 + z1) / 2 + 0.2); scene.add(sheetRoof);
   const lamp = M(0xfff6dc, 0.3, 0, { emissive: 0xffe9b0, emissiveIntensity: 1.6 });
-  [z0 + 3.5, z1 - 3.5].forEach(z => { C(0.3, 0.06, W / 2, H - 0.03, z, M(0xffffff, 0.5)).castShadow = false; C(0.22, 0.02, W / 2, H - 0.07, z, lamp).castShadow = false; });
+  [3.1, 8.9].forEach(o => { const y = ry(z0 + o) - 0.3; B(4.25, 7.25, y - 0.06, y + 0.06, z0 + o - 0.06, z0 + o + 0.06, lamp).castShadow = false;
+    B(4.2, 7.3, y + 0.06, y + 0.12, z0 + o - 0.09, z0 + o + 0.09, post).castShadow = false; });                  // tube lights under the purlins
   // Blinds on the three open sides: rolled up under the beams, or down to the floor.
   const roll = M(0xe9eef0, 0.6), pvc = new THREE.MeshStandardMaterial({ color: 0xd8eef6, transparent: true, opacity: 0.3, roughness: 0.15, side: THREE.DoubleSide, depthWrite: false });
-  C(0.16, OL - 0.4, 0.15, 8.42, (z0 + z1) / 2, roll, "z", blindsUp); C(0.16, OL - 0.4, W - 0.15, 8.42, (z0 + z1) / 2, roll, "z", blindsUp);
-  C(0.16, W - 0.7, W / 2, 8.42, z1 - 0.15, roll, "x", blindsUp);
-  const sheet = (w, x, z, ry) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, 8.6), pvc); m.position.set(x, 4.3, z); m.rotation.y = ry; blindsDown.add(m); };
-  sheet(OL - 0.3, 0.15, (z0 + z1) / 2, Math.PI / 2); sheet(OL - 0.3, W - 0.15, (z0 + z1) / 2, Math.PI / 2); sheet(W - 0.6, W / 2, z1 - 0.15, 0);
-  B(0.1, 0.2, 0, 0.12, z0 + 0.1, z1 - 0.3, roll, blindsDown); B(W - 0.2, W - 0.1, 0, 0.12, z0 + 0.1, z1 - 0.3, roll, blindsDown); B(0.3, W - 0.3, 0, 0.12, z1 - 0.2, z1 - 0.1, roll, blindsDown);
+  // Motorized roller cassettes fixed to the pipe frame; they stay in place whether the blinds are up or down.
+  const cas = M(0x4a4f55, 0.5, 0.3), by = 7.95;
+  [0.38, W - 0.38].forEach(x => B(x - 0.18, x + 0.18, by - 0.18, by + 0.18, z0 + 0.4, z1 - 0.5, cas));
+  B(0.6, W - 0.6, by - 0.18, by + 0.18, z1 - 0.56, z1 - 0.2, cas);
+  const sheet = (w, x, z, r) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, by - 0.18), pvc); m.position.set(x, (by - 0.18) / 2, z); m.rotation.y = r; blindsDown.add(m); };
+  sheet(OL - 0.9, 0.38, (z0 + z1) / 2, Math.PI / 2); sheet(OL - 0.9, W - 0.38, (z0 + z1) / 2, Math.PI / 2); sheet(W - 1.2, W / 2, z1 - 0.38, 0);
+  B(0.33, 0.43, 0, 0.12, z0 + 0.4, z1 - 0.5, roll, blindsDown); B(W - 0.43, W - 0.33, 0, 0.12, z0 + 0.4, z1 - 0.5, roll, blindsDown); B(0.6, W - 0.6, 0, 0.12, z1 - 0.43, z1 - 0.33, roll, blindsDown);
+  B(0.33, 0.43, by - 0.3, by - 0.18, z0 + 0.4, z1 - 0.5, roll, blindsUp); B(W - 0.43, W - 0.33, by - 0.3, by - 0.18, z0 + 0.4, z1 - 0.5, roll, blindsUp); B(0.6, W - 0.6, by - 0.3, by - 0.18, z1 - 0.43, z1 - 0.33, roll, blindsUp);
 }
 
 // ---------- ceiling: plain slab plus an optional border false ceiling with cove light ----------
