@@ -25,6 +25,7 @@
 <div class="bar">
   <select id="paint" aria-label="Wall colours"></select>
   <select id="floor" aria-label="Flooring"></select>
+  <select id="blinds" aria-label="Outdoor blinds"></select>
   <select id="view" aria-label="View"></select>
 </div>
 <script type="module">
@@ -65,9 +66,9 @@ controls.minDistance = 8; controls.maxDistance = 70; controls.maxPolarAngle = 1.
 
 scene.add(new THREE.HemisphereLight(0xffffff, 0xb9b0a2, 1.5));
 const sun = new THREE.DirectionalLight(0xfff1dd, 2.4);
-sun.position.set(17, 26, 24); sun.target.position.set(5.5, 0, 9);
+sun.position.set(19, 30, 32); sun.target.position.set(5.5, 0, 15);
 sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.03;
-Object.assign(sun.shadow.camera, { left: -16, right: 16, top: 16, bottom: -16, near: 1, far: 80 });
+Object.assign(sun.shadow.camera, { left: -22, right: 22, top: 22, bottom: -22, near: 1, far: 100 });
 scene.add(sun, sun.target);
 
 // ---------- helpers ----------
@@ -278,8 +279,21 @@ const clear = M(0xe6f0f4, 0.1, 0, { transparent: true, opacity: 0.35, depthWrite
 [0.5, 2.2, 3.9].forEach((z, i) => B(0.2, 1.8, 0.52, 1.45, z, z + 1.2, M([0x5c6770, 0x7c8790, 0x5c6770][i], 0.8)));  // storage bins
 
 // ---------- workout zone ----------
-B(7, 9, 0, 0.05, 7.6, 13.6, M(0x2f7f78, 0.95));
-[[9.7, 8.2], [9.7, 9.0]].forEach(([x, z]) => { C(0.07, 0.9, x, 0.2, z, steel, "x"); C(0.2, 0.25, x - 0.4, 0.2, z, black, "x"); C(0.2, 0.25, x + 0.4, 0.2, z, black, "x"); });
+// Two-seater sofa under the right window (the exercise mat moved outside).
+{
+  const fab = M(0xa59f93, 0.95), fab2 = M(0xb3ada1, 0.95), z0 = 8.7, z1 = 14.7;
+  B(8.7, 11.4, 0.35, 1.25, z0, z1, fab); B(10.75, 11.4, 1.25, 2.8, z0, z1, fab);
+  B(8.7, 11.4, 0.35, 2.0, z0, z0 + 0.5, fab); B(8.7, 11.4, 0.35, 2.0, z1 - 0.5, z1, fab);
+  B(8.75, 10.75, 1.25, 1.6, z0 + 0.55, 11.68, fab2); B(8.75, 10.75, 1.25, 1.6, 11.72, z1 - 0.55, fab2);
+  [[8.85, z0 + 0.15], [8.85, z1 - 0.15], [11.25, z0 + 0.15], [11.25, z1 - 0.15]].forEach(([x, z]) => C(0.08, 0.35, x, 0.175, z, black));
+  [[0x9caf94, 9.9, 0.25], [0xc4704f, 13.5, -0.25]].forEach(([c, z, r]) => { const g = new THREE.Group(); g.position.set(10.45, 2.05, z); g.rotation.z = 0.35; g.rotation.y = r; scene.add(g);
+    B(-0.12, 0.12, -0.5, 0.5, -0.5, 0.5, M(c, 0.95), g); });
+  C(0.85, 0.08, 7.2, 1.35, 11.7, walnut); C(0.06, 1.3, 7.2, 0.66, 11.7, black); C(0.5, 0.05, 7.2, 0.03, 11.7, black);   // side table
+  C(0.13, 0.3, 7.0, 1.54, 11.5, M(0xe8e4dc, 0.5));
+}
+// Pull-out waste bin in the coffee cabinet nearest the door.
+B(6.25, 7.7, 0.35, 2.8, 15.25, 15.32, charcoal); B(6.5, 7.45, 0.4, 2.2, 15.35, 16.0, M(0x7c8790, 0.7));
+B(6.3, 6.36, 0.5, 0.56, 15.3, 16.05, alu); B(7.59, 7.65, 0.5, 0.56, 15.3, 16.05, alu);
 C(0.42, 0.9, 10.75, 0.45, 7.3, M(0xf1eee8, 0.7), "y", scene, 0.5);                                 // plant
 [[0, 1.6, 0, 0.75], [0.35, 2.2, 0.15, 0.6], [-0.3, 2.3, -0.2, 0.55], [0.05, 2.8, 0.05, 0.5]].forEach(([dx, y, dz, r]) => {
   const m = new THREE.Mesh(new THREE.IcosahedronGeometry(r, 1), M(0x4f8a56, 0.9, 0, { flatShading: true }));
@@ -306,6 +320,33 @@ let fanRotor;
   // AC pipe hole through the left wall, beside the unit (3 in core hole).
   const ring = new THREE.Mesh(new THREE.RingGeometry(0.125, 0.19, 32), M(0xb9bdc2, 0.5)); ring.position.set(9.2, 7.95, 0.03); leftWall.add(ring);
   const hole = new THREE.Mesh(new THREE.CircleGeometry(0.125, 32), M(0x0c0d0e, 1)); hole.position.set(9.2, 7.95, 0.03); leftWall.add(hole);
+}
+
+// ---------- covered outdoor area beyond the entry door: workout space with roll-up blinds ----------
+const OL = 12, blindsUp = new THREE.Group(), blindsDown = new THREE.Group();
+scene.add(blindsUp, blindsDown); blindsDown.visible = false;
+{
+  const z0 = L, z1 = L + OL, concrete = M(0xbfc2c4, 0.95), post = M(0x4a4f55, 0.6, 0.3);
+  B(0, W, -0.3, -0.02, z0, z1, concrete);
+  B(2.5, 10.5, -0.02, 0.05, z0 + 2.5, z1 - 2.5, M(0x3a3f44, 0.95));                               // rubber tiles
+  B(5.5, 7.5, 0.05, 0.1, z0 + 3, z1 - 3, M(0x2f7f78, 0.95));                                       // exercise mat
+  [[9.2, z0 + 4], [9.2, z0 + 4.8]].forEach(([x, z]) => { C(0.07, 0.9, x, 0.25, z, steel, "x"); C(0.2, 0.25, x - 0.4, 0.25, z, black, "x"); C(0.2, 0.25, x + 0.4, 0.25, z, black, "x"); });
+  B(0.4, 2.1, -0.02, 1.6, z1 - 3.6, z1 - 0.6, M(0x55606a, 0.8)); B(0.35, 2.15, 1.6, 1.72, z1 - 3.65, z1 - 0.55, M(0x6b7780, 0.7));   // weatherproof storage box
+  C(0.45, 1.7, 7.3, 0.83, z0 + 0.7, M(0x3d5a48, 0.7)); C(0.48, 0.1, 7.3, 1.73, z0 + 0.7, black);   // outdoor bin beside the door
+  // Roof: faces down only, so it hides from above. Beams and posts mark its edge.
+  const roof = new THREE.Mesh(new THREE.PlaneGeometry(W, OL), M(0xf3f3f1, 0.9, 0, { emissive: 0xffffff, emissiveIntensity: 0.35 }));
+  roof.rotation.x = Math.PI / 2; roof.position.set(W / 2, H, (z0 + z1) / 2); scene.add(roof);
+  B(0, 0.3, 8.6, H, z0, z1, post); B(W - 0.3, W, 8.6, H, z0, z1, post); B(0, W, 8.6, H, z1 - 0.3, z1, post);
+  B(0, 0.3, -0.02, 8.6, z1 - 0.3, z1, post); B(W - 0.3, W, -0.02, 8.6, z1 - 0.3, z1, post);
+  const lamp = M(0xfff6dc, 0.3, 0, { emissive: 0xffe9b0, emissiveIntensity: 1.6 });
+  [z0 + 3.5, z1 - 3.5].forEach(z => { C(0.3, 0.06, W / 2, H - 0.03, z, M(0xffffff, 0.5)).castShadow = false; C(0.22, 0.02, W / 2, H - 0.07, z, lamp).castShadow = false; });
+  // Blinds on the three open sides: rolled up under the beams, or down to the floor.
+  const roll = M(0xe9eef0, 0.6), pvc = new THREE.MeshStandardMaterial({ color: 0xd8eef6, transparent: true, opacity: 0.3, roughness: 0.15, side: THREE.DoubleSide, depthWrite: false });
+  C(0.16, OL - 0.4, 0.15, 8.42, (z0 + z1) / 2, roll, "z", blindsUp); C(0.16, OL - 0.4, W - 0.15, 8.42, (z0 + z1) / 2, roll, "z", blindsUp);
+  C(0.16, W - 0.7, W / 2, 8.42, z1 - 0.15, roll, "x", blindsUp);
+  const sheet = (w, x, z, ry) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, 8.6), pvc); m.position.set(x, 4.3, z); m.rotation.y = ry; blindsDown.add(m); };
+  sheet(OL - 0.3, 0.15, (z0 + z1) / 2, Math.PI / 2); sheet(OL - 0.3, W - 0.15, (z0 + z1) / 2, Math.PI / 2); sheet(W - 0.6, W / 2, z1 - 0.15, 0);
+  B(0.1, 0.2, 0, 0.12, z0 + 0.1, z1 - 0.3, roll, blindsDown); B(W - 0.2, W - 0.1, 0, 0.12, z0 + 0.1, z1 - 0.3, roll, blindsDown); B(0.3, W - 0.3, 0, 0.12, z1 - 0.2, z1 - 0.1, roll, blindsDown);
 }
 
 // ---------- ceiling: plain slab plus an optional border false ceiling with cove light ----------
@@ -384,7 +425,8 @@ const VIEWS = [
   { name: "Overview" },
   { name: "Inside · from the door", pos: [9.3, 5.6, 17.3], target: [3.6, 4.6, 9.5] },
   { name: "Inside · from the desk end", pos: [1.6, 5.6, 6.2], target: [6.8, 4.4, 14] },
-  { name: "Inside · ceiling", pos: [10.2, 3.2, 17.0], target: [5.2, 6.6, 11.5] }
+  { name: "Inside · ceiling", pos: [10.2, 3.2, 17.0], target: [5.2, 6.6, 11.5] },
+  { name: "Outside · workout area", pos: [1.6, 5.8, 29.0], target: [7.2, 3.6, 21.5] }
 ];
 function setView(v) {
   const inside = !!v.pos;
@@ -392,10 +434,11 @@ function setView(v) {
   controls.minDistance = inside ? 0.5 : 8; controls.maxPolarAngle = inside ? 2.6 : 1.5;
   if (inside) { camera.position.set(...v.pos); controls.target.set(...v.target); }
   else { const k = Math.max(1, 1.25 / camera.aspect);
-    controls.target.set(5.2, 2.2, 9.6); camera.position.set(5.2 + 13 * k, 2.2 + 13 * k, 9.6 + 16 * k); }
+    controls.target.set(5.4, 1.5, 14.5); camera.position.set(5.4 + 19 * k, 1.5 + 19 * k, 14.5 + 20 * k); }
   controls.update();
 }
 cove.visible = false; // plain ceiling chosen; the border false ceiling is kept in code but hidden
+fill("blinds", [{ name: "Outdoor blinds · up", down: false }, { name: "Outdoor blinds · down", down: true }], b => { blindsDown.visible = b.down; blindsUp.visible = !b.down; });
 fill("view", VIEWS, setView);
 window.addEventListener("resize", resize);
 resize(); setView(VIEWS[0]);
