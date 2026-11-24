@@ -25,6 +25,8 @@
 <div class="bar">
   <select id="paint" aria-label="Wall colours"></select>
   <select id="floor" aria-label="Flooring"></select>
+  <select id="ceiling" aria-label="Ceiling"></select>
+  <select id="view" aria-label="View"></select>
 </div>
 <script type="module">
 import * as THREE from "three";
@@ -307,6 +309,35 @@ let fanRotor;
   const hole = new THREE.Mesh(new THREE.CircleGeometry(0.125, 32), M(0x0c0d0e, 1)); hole.position.set(9.2, 7.95, 0.03); leftWall.add(hole);
 }
 
+// ---------- ceiling: plain slab plus an optional border false ceiling with cove light ----------
+// Every face points down or inward, so the ceiling vanishes when you look from above and shows from inside.
+const cove = new THREE.Group(); scene.add(cove);
+{
+  const ceilMat = M(0xffffff, 0.9, 0, { emissive: 0xffffff, emissiveIntensity: 0.42 });
+  const glowMat = M(0xfff0cf, 0.6, 0, { emissive: 0xffd9a0, emissiveIntensity: 1.4 });
+  const washMatC = M(0xffffff, 0.9, 0, { emissive: 0xffffff, emissiveIntensity: 0.42 });
+  const down = (shape, y, mat, parent = scene) => { const m = new THREE.Mesh(new THREE.ShapeGeometry(shape), mat);
+    m.rotation.x = Math.PI / 2; m.position.y = y; parent.add(m); return m; };
+  const rectShape = (x0, z0, x1, z1) => { const s = new THREE.Shape(); s.moveTo(x0, z0); s.lineTo(x1, z0); s.lineTo(x1, z1); s.lineTo(x0, z1); s.closePath(); return s; };
+  const rectHole = (x0, z0, x1, z1) => { const p = new THREE.Path(); p.moveTo(x0, z0); p.lineTo(x1, z0); p.lineTo(x1, z1); p.lineTo(x0, z1); p.closePath(); return p; };
+  const slab = new THREE.Shape();
+  slab.moveTo(0, 0); slab.lineTo(AX, 0); slab.lineTo(AX, WZ); slab.lineTo(W, WZ); slab.lineTo(W, L); slab.lineTo(0, L); slab.closePath();
+  down(slab, H, ceilMat); down(rectShape(AX, 0, W, WZ), H, washMatC);
+  // Border band: 1.5 ft wide, dropped 6 in, around the main office area.
+  const bw = 1.5, drop = 0.5, x0 = bw, x1 = W - bw, z0 = WZ + bw, z1 = L - bw, yb = H - drop;
+  const band = rectShape(0, WZ, W, L); band.holes.push(rectHole(x0, z0, x1, z1));
+  down(band, yb, ceilMat, cove);
+  const glowRing = rectShape(x0, z0, x1, z1); glowRing.holes.push(rectHole(x0 + 0.7, z0 + 0.7, x1 - 0.7, z1 - 0.7));
+  down(glowRing, H - 0.01, M(0xfff3dc, 0.9, 0, { emissive: 0xffdca8, emissiveIntensity: 0.55 }), cove);
+  const fascia = (ax, az, bx, bz) => {
+    const dx = bx - ax, dz = bz - az, len = Math.hypot(dx, dz), g = new THREE.Group();
+    g.position.set(ax, 0, az); g.rotation.y = Math.atan2(-dz, dx); cove.add(g);
+    const lip = new THREE.Mesh(new THREE.PlaneGeometry(len, drop - 0.15), ceilMat); lip.position.set(len / 2, yb + (drop - 0.15) / 2, 0); g.add(lip);
+    const led = new THREE.Mesh(new THREE.PlaneGeometry(len, 0.15), glowMat); led.position.set(len / 2, H - 0.075, 0); g.add(led);
+  };
+  fascia(x0, z1, x0, z0); fascia(x0, z0, x1, z0); fascia(x1, z0, x1, z1); fascia(x1, z1, x0, z1);
+}
+
 // ---------- switchboards and sockets ----------
 // Flat plates on the wall face, so they hide together with their wall. kinds: "s" = switch, "p" = socket.
 {
@@ -350,12 +381,25 @@ function resize() {
   const w = window.innerWidth, h = window.innerHeight, a = w / h;
   renderer.setSize(w, h); camera.aspect = a; camera.updateProjectionMatrix();
 }
-function frameView() {
-  const k = Math.max(1, 1.25 / camera.aspect);
-  camera.position.set(5.2 + 13 * k, 2.2 + 13 * k, 9.6 + 16 * k);
+const VIEWS = [
+  { name: "Overview" },
+  { name: "Inside · from the door", pos: [9.3, 5.6, 17.3], target: [3.6, 4.6, 9.5] },
+  { name: "Inside · from the desk end", pos: [1.6, 5.6, 6.2], target: [6.8, 4.4, 14] },
+  { name: "Inside · ceiling", pos: [10.2, 3.2, 17.0], target: [5.2, 6.6, 11.5] }
+];
+function setView(v) {
+  const inside = !!v.pos;
+  camera.fov = inside ? 68 : 40; camera.updateProjectionMatrix();
+  controls.minDistance = inside ? 0.5 : 8; controls.maxPolarAngle = inside ? 2.6 : 1.5;
+  if (inside) { camera.position.set(...v.pos); controls.target.set(...v.target); }
+  else { const k = Math.max(1, 1.25 / camera.aspect);
+    controls.target.set(5.2, 2.2, 9.6); camera.position.set(5.2 + 13 * k, 2.2 + 13 * k, 9.6 + 16 * k); }
+  controls.update();
 }
+fill("ceiling", [{ name: "Border false ceiling", on: true }, { name: "Plain ceiling", on: false }], c => { cove.visible = c.on; });
+fill("view", VIEWS, setView);
 window.addEventListener("resize", resize);
-resize(); frameView(); controls.update();
+resize(); setView(VIEWS[0]);
 renderer.setAnimationLoop(() => { fanRotor.rotation.y += 0.06; controls.update(); renderer.render(scene, camera); });
 </script>
 </body>
