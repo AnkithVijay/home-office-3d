@@ -42,10 +42,10 @@ const PAINTS = [
   { name: "Warm white + terracotta", wall: 0xf2ede3, accent: 0xc4704f }
 ];
 const FLOORS = [
-  { name: "Vinyl plank · light oak", color: 0xdcc39a, type: "plank" },
-  { name: "Engineered wood · natural oak", color: 0xb98a55, type: "plank" },
-  { name: "Laminate · grey oak", color: 0xb5ada0, type: "plank" },
-  { name: "Porcelain tile · matte", color: 0xe6e3dc, type: "tile" }
+  { name: "Tile · warm beige matte", color: 0xd9cbb4, type: "tile" },
+  { name: "Tile · light grey matte", color: 0xc6c7c3, type: "tile" },
+  { name: "Tile · ivory matte", color: 0xece6da, type: "tile" },
+  { name: "Tile · wood-look oak", color: 0xcfae80, type: "plank" }
 ];
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -139,13 +139,13 @@ const tileTex = canvasTex(g => {
 });
 
 // ---------- floor ----------
-const floorMat = M(FLOORS[0].color, 0.65, 0, { map: plankTex });
+const floorMat = M(FLOORS[0].color, 0.65, 0, { map: tileTex });
 {
   const s = new THREE.Shape();
   s.moveTo(0, 0); s.lineTo(AX, 0); s.lineTo(AX, -WZ); s.lineTo(W, -WZ); s.lineTo(W, -L); s.lineTo(0, -L); s.closePath();
   const f = new THREE.Mesh(new THREE.ShapeGeometry(s), floorMat);
   f.rotation.x = -Math.PI / 2; f.receiveShadow = true; scene.add(f);
-  const wf = new THREE.Mesh(new THREE.PlaneGeometry(W - AX, WZ), M(0xcbd5da, 0.4));
+  const wf = new THREE.Mesh(new THREE.PlaneGeometry(W - AX, WZ), M(0x8f9699, 0.6));
   wf.rotation.x = -Math.PI / 2; wf.position.set((AX + W) / 2, -0.01, WZ / 2); wf.receiveShadow = true; scene.add(wf);
 }
 
