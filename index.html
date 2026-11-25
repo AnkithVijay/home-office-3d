@@ -219,12 +219,13 @@ B(0.5, 7.25, 5.0, 5.09, 17.15, L, walnut);                                      
   C(0.12, 0.05, 9.8, 7.6, 0.17, chrome, "z");
 }
 
-// ---------- desk (left wall, under the window) ----------
-const deskTop = M(0x8a5a3a, 0.5), darkMetal = M(0x202327, 0.5, 0.6), screen = M(0x0e1114, 0.25, 0.2),
+// ---------- desk (left wall, under the window): 150 x 60 cm electric sit-stand, white ----------
+const deskTop = M(0xf3f2ee, 0.45), deskFrame = M(0xe4e4e1, 0.45, 0.3), darkMetal = M(0x202327, 0.5, 0.6), screen = M(0x0e1114, 0.25, 0.2),
   glow = M(0x24405c, 0.3, 0, { emissive: 0x2c5a85, emissiveIntensity: 0.7 }), alu = M(0xb9bdc2, 0.35, 0.8);
-B(0, 2.5, 2.42, 2.52, 7.5, 13.5, deskTop);
-[[8.1, 8.35], [12.65, 12.9]].forEach(([a, b]) => { B(1.1, 1.4, 0.08, 2.42, a, b, darkMetal); B(0.15, 2.35, 0, 0.08, a, b, darkMetal); });
-B(1.15, 1.35, 2.3, 2.42, 8.2, 12.8, darkMetal);
+B(0.05, 2.02, 2.46, 2.52, 8.04, 12.96, deskTop);
+[[8.5, 8.75], [12.25, 12.5]].forEach(([a, b]) => { B(0.9, 1.17, 0.08, 2.46, a, b, deskFrame); B(0.12, 1.95, 0, 0.08, a, b, deskFrame); });
+B(0.93, 1.13, 2.34, 2.46, 8.6, 12.4, deskFrame);
+B(1.92, 2.04, 2.39, 2.46, 12.0, 12.5, black);                                                      // height controller
 C(0.05, 1.3, 0.3, 3.17, 10.5, darkMetal); B(0.3, 0.5, 3.5, 3.6, 10.45, 10.55, darkMetal);         // monitor arm
 B(0.5, 0.58, 3.0, 4.15, 9.5, 11.5, screen); B(0.58, 0.59, 3.05, 4.1, 9.55, 11.45, glow);          // monitor
 function laptop(xc, zc) {
@@ -233,29 +234,34 @@ function laptop(xc, zc) {
   const g = new THREE.Group(); g.position.set(xc - 0.35, 2.56, zc); g.rotation.z = 0.3; scene.add(g);
   B(-0.015, 0.015, 0, 0.68, -0.5, 0.5, alu, g); B(0.015, 0.02, 0.03, 0.65, -0.47, 0.47, glow, g);
 }
-laptop(1.3, 10.5); laptop(1.3, 12.0);
-[[7.7, 8.15], [12.85, 13.3]].forEach(([a, b]) => { B(0.2, 0.65, 2.52, 3.3, a, b, black);
-  C(0.14, 0.02, 0.66, 2.8, (a + b) / 2, alu, "x"); C(0.07, 0.02, 0.66, 3.1, (a + b) / 2, alu, "x"); });
-B(1.6, 2.2, 2.52, 2.58, 7.9, 9.2, black);                                                          // gaming keyboard
-B(1.0, 1.4, 2.52, 2.56, 8.4, 8.7, alu);                                                            // phone stand
-{ const g = new THREE.Group(); g.position.set(1.12, 2.56, 8.55); g.rotation.z = 0.3; scene.add(g);
+laptop(1.3, 10.5); laptop(1.3, 11.75);
+[[8.12, 8.5], [12.5, 12.88]].forEach(([a, b]) => { B(0.15, 0.55, 2.52, 3.25, a, b, black);
+  C(0.12, 0.02, 0.56, 2.78, (a + b) / 2, alu, "x"); C(0.06, 0.02, 0.56, 3.06, (a + b) / 2, alu, "x"); });
+B(1.35, 1.9, 2.52, 2.58, 8.55, 9.75, black);                                                       // gaming keyboard
+B(0.7, 1.1, 2.52, 2.56, 8.75, 9.05, alu);                                                          // phone stand
+{ const g = new THREE.Group(); g.position.set(0.82, 2.56, 8.9); g.rotation.z = 0.3; scene.add(g);
   B(-0.015, 0.015, 0, 0.3, -0.3, 0.3, screen, g); B(0.015, 0.02, 0.02, 0.28, -0.28, 0.28, glow, g); }
 
-// ---------- chair ----------
+// ---------- chair: mesh back, headrest, lumbar massager, polished aluminium base ----------
 {
-  const ch = new THREE.Group(); ch.position.set(3.35, 0, 10.5); scene.add(ch);
-  const fabric = M(0x33383d, 0.95), frame = M(0x1c1f22, 0.5, 0.4);
+  const ch = new THREE.Group(); ch.position.set(2.95, 0, 10.5); scene.add(ch);
+  const fabric = M(0x26292d, 0.95), frame = M(0x1c1f22, 0.5, 0.4), polished = M(0xd0d4d8, 0.25, 0.9);
+  const mesh = M(0x2b2f33, 0.9, 0, { transparent: true, opacity: 0.82 });
   for (let i = 0; i < 5; i++) {
     const a = (i / 5) * Math.PI * 2, s = new THREE.Group(); s.rotation.y = a; ch.add(s);
-    B(0, 0.95, 0.18, 0.26, -0.06, 0.06, frame, s);
+    B(0, 0.95, 0.18, 0.26, -0.06, 0.06, polished, s);
     const w = new THREE.Mesh(new THREE.SphereGeometry(0.1, 12, 8), frame); w.position.set(0.92, 0.1, 0); w.castShadow = true; s.add(w);
   }
-  C(0.07, 1.15, 0, 0.82, 0, alu, "y", ch);
-  B(-0.75, 0.75, 1.39, 1.62, -0.75, 0.75, fabric, ch);
-  const back = new THREE.Group(); back.position.set(0.7, 1.6, 0); back.rotation.z = -0.13; ch.add(back);
-  B(-0.06, 0.06, 0.15, 2.1, -0.7, 0.7, fabric, back);
-  B(-0.14, -0.05, 0.35, 0.85, -0.55, 0.55, M(0x9caf94, 0.9), back);                                // lumbar pad
-  [-0.82, 0.82].forEach(z => { B(-0.05, 0.05, 1.55, 2.2, z - 0.04, z + 0.04, frame, ch); B(-0.45, 0.45, 2.2, 2.28, z - 0.1, z + 0.1, frame, ch); });
+  C(0.07, 1.15, 0, 0.82, 0, polished, "y", ch);
+  B(-0.8, 0.75, 1.42, 1.65, -0.8, 0.8, fabric, ch);
+  const back = new THREE.Group(); back.position.set(0.72, 1.62, 0); back.rotation.z = -0.13; ch.add(back);
+  B(-0.03, 0.03, 0.15, 2.05, -0.75, 0.75, mesh, back);
+  [-0.77, 0.77].forEach(z => B(-0.05, 0.05, 0.1, 2.1, z - 0.04, z + 0.04, frame, back));
+  B(-0.05, 0.05, 2.05, 2.13, -0.8, 0.8, frame, back);
+  B(0.03, 0.12, 0.1, 2.3, -0.07, 0.07, frame, back);                                               // spine
+  B(-0.2, -0.03, 0.3, 0.85, -0.55, 0.55, M(0x3d4349, 0.8), back);                                  // lumbar massager
+  B(-0.14, -0.02, 2.35, 2.8, -0.45, 0.45, fabric, back);                                           // headrest
+  [-0.92, 0.92].forEach(z => { B(-0.05, 0.05, 1.55, 2.25, z - 0.04, z + 0.04, frame, ch); B(-0.5, 0.4, 2.25, 2.33, z - 0.12, z + 0.12, frame, ch); });
 }
 
 // ---------- printer rack (alcove beside the washroom) ----------
